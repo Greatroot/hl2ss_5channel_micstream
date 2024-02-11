@@ -221,6 +221,13 @@ class Parameters_RM_IMU_MAGNETOMETER:
 
 # Microphone Parameters
 class Parameters_MICROPHONE:
+    ARRAY_CHANNELS     = 5
+    ARRAY_TOP_LEFT     = 0
+    ARRAY_TOP_CENTER   = 1
+    ARRAY_TOP_RIGHT    = 2
+    ARRAY_BOTTOM_LEFT  = 3
+    ARRAY_BOTTOM_RIGHT = 4
+
     SAMPLE_RATE    = 48000
     CHANNELS       = 2
     PERIOD         = 1 / SAMPLE_RATE
@@ -1134,15 +1141,18 @@ class _decode_microphone:
 
 
 class _unpack_microphone:
+    def __init__(self, level):
+        self.level = level
+
     def create(self):
-        pass
+        self.dtype = np.float32 if (self.level == AACLevel.L5) else np.int16
 
     def decode(self, payload):
-        return np.frombuffer(payload, dtype=np.int16).reshape((1, -1))
+        return np.frombuffer(payload, dtype=self.dtype).reshape((1, -1))
 
 
-def decode_microphone(profile):
-    return _unpack_microphone() if (profile == AudioProfile.RAW) else _decode_microphone(profile)
+def decode_microphone(profile, level):
+    return _unpack_microphone(level) if (profile == AudioProfile.RAW) else _decode_microphone(profile)
 
 
 #------------------------------------------------------------------------------
@@ -1400,7 +1410,7 @@ class rx_decoded_pv(rx_pv):
 class rx_decoded_microphone(rx_microphone):
     def __init__(self, host, port, chunk, profile, level):
         super().__init__(host, port, chunk, profile, level)
-        self._codec = decode_microphone(profile)
+        self._codec = decode_microphone(profile, level)
         
     def open(self):
         self._codec.create()
@@ -1418,7 +1428,7 @@ class rx_decoded_microphone(rx_microphone):
 class rx_decoded_extended_audio(rx_extended_audio):
     def __init__(self, host, port, chunk, mixer_mode, loopback_gain, microphone_gain, profile, level):
         super().__init__(host, port, chunk, mixer_mode, loopback_gain, microphone_gain, profile, level)
-        self._codec = decode_microphone(profile)
+        self._codec = decode_microphone(profile, None)
         
     def open(self):
         self._codec.create()
@@ -1788,6 +1798,7 @@ class ipc_rc(_context_manager):
     _CMD_SET_PV_ISO_SPEED = 0x0A
     _CMD_SET_PV_BACKLIGHT_COMPENSATION = 0x0B
     _CMD_SET_PV_SCENE_MODE = 0x0C
+    _CMD_SET_FLAT_MODE = 0x0D
 
     def __init__(self, host, port):
         self.host = host
@@ -1861,6 +1872,10 @@ class ipc_rc(_context_manager):
 
     def set_pv_scene_mode(self, mode):
         command = struct.pack('<BI', ipc_rc._CMD_SET_PV_SCENE_MODE, mode)
+        self._client.sendall(command)
+
+    def set_flat_mode(self, mode):
+        command = struct.pack('<BI', ipc_rc._CMD_SET_FLAT_MODE, mode)
         self._client.sendall(command)
 
 
